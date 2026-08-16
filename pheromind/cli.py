@@ -21,7 +21,7 @@ from . import scenarios
 from .brain import Brain, load_genome, random_genome, save_genome
 from .colony import Colony, ColonyConfig, evaluate
 from .evolve import EvolutionConfig, GenerationReport, evolve
-from .render import begin_animation, draw, end_animation
+from .render import begin_animation, draw, draw_duel, end_animation
 from .world import World, WorldConfig
 
 CHAMPION_DIR = Path(__file__).resolve().parent.parent / "champions"
@@ -181,6 +181,62 @@ def cmd_watch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_duel(args: argparse.Namespace) -> int:
+    """Race two colonies on identical maps, side by side."""
+    colony_cfg = _colony_cfg(args)
+    world_cfg = _world_cfg(args)
+
+    # Two screens of map have to fit in one terminal, so narrow the world
+    # unless the caller has explicitly asked for a size.
+    if args.width is None:
+        world_cfg = replace(world_cfg, width=min(world_cfg.width, 38))
+
+    left_genome = random_genome(np.random.default_rng(args.seed)) if args.random else _load(args)
+    left_title = "untrained" if args.random else args.scenario
+
+    if args.vs:
+        right_genome, _ = load_genome(Path(args.vs))
+        right_title = Path(args.vs).stem
+    else:
+        right_genome = random_genome(np.random.default_rng(args.seed + 991))
+        right_title = "untrained"
+
+    # Same seed on both sides: identical map, identical starting headings, so
+    # the only variable left is the genome.
+    def build(genome: np.ndarray) -> Colony:
+        rng = np.random.default_rng(args.seed)
+        world = World.generate(world_cfg, rng)
+        return Colony.spawn(world, Brain.from_genome(genome), colony_cfg, rng)
+
+    left, right = build(left_genome), build(right_genome)
+
+    delay = 1.0 / args.fps if args.fps > 0 else 0.0
+    begin_animation()
+    try:
+        for _ in range(colony_cfg.steps):
+            left.step()
+            right.step()
+            if left.ticks % args.every == 0:
+                draw_duel(left, right, left_title, right_title)
+                if delay:
+                    time.sleep(delay)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        draw_duel(left, right, left_title, right_title)
+        end_animation()
+
+    if left.delivered == right.delivered:
+        print(f"\ndead heat — {left.delivered} each.")
+    else:
+        (winner, won), (loser, lost) = sorted(
+            [(left_title, left.delivered), (right_title, right.delivered)],
+            key=lambda pair: -pair[1],
+        )
+        print(f"\n{winner} wins: {won} vs {lost} (+{won - lost}).")
+    return 0
+
+
 def cmd_bench(args: argparse.Namespace) -> int:
     genome = random_genome(np.random.default_rng(args.seed)) if args.random else _load(args)
     colony_cfg, world_cfg = _colony_cfg(args), _world_cfg(args)
@@ -243,6 +299,15 @@ def build_parser() -> argparse.ArgumentParser:
     watch.add_argument("--fps", type=float, default=18.0, help="0 for no delay")
     watch.add_argument("--every", type=int, default=1, help="draw every Nth tick")
     watch.set_defaults(func=cmd_watch)
+
+    duel = subs.add_parser("duel", help="race two colonies side by side on one map")
+    add_world_args(duel)
+    duel.add_argument("--genome", help="left colony (default: champions/<scenario>.json)")
+    duel.add_argument("--vs", help="right colony (default: untrained weights)")
+    duel.add_argument("--random", action="store_true", help="make the left side untrained too")
+    duel.add_argument("--fps", type=float, default=18.0, help="0 for no delay")
+    duel.add_argument("--every", type=int, default=1, help="draw every Nth tick")
+    duel.set_defaults(func=cmd_duel)
 
     bench = subs.add_parser("bench", help="score a genome on unseen worlds")
     add_world_args(bench)

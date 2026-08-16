@@ -41,8 +41,12 @@ def _shade(value: float, ramp: list[int]) -> str:
     return BLUE.format(ramp[min(level - 1, len(ramp) - 1)]) + SHADES[level] + RESET
 
 
-def frame(colony: Colony) -> str:
-    """Render one full frame, without cursor control."""
+def grid_lines(colony: Colony) -> list[str]:
+    """The bordered map as a list of lines, every one the same visual width.
+
+    Uniform width is what lets two colonies be stitched together side by side;
+    the status line is deliberately left out because it is a different length.
+    """
     world = colony.world
     h, w = world.shape
     grid = [[" " for _ in range(w)] for _ in range(h)]
@@ -80,8 +84,18 @@ def frame(colony: Colony) -> str:
         grid[int(y)][int(x)] = (RED + "A" if carrying else WHITE + "a") + RESET
 
     border = DIM + "+" + "-" * w + "+" + RESET
-    body = "\n".join(DIM + "|" + RESET + "".join(row) + DIM + "|" + RESET for row in grid)
-    return f"{border}\n{body}\n{border}\n{status(colony)}"
+    rows = [DIM + "|" + RESET + "".join(row) + DIM + "|" + RESET for row in grid]
+    return [border, *rows, border]
+
+
+def grid_width(colony: Colony) -> int:
+    """Visual width of a grid line: the map plus its two border columns."""
+    return colony.world.cfg.width + 2
+
+
+def frame(colony: Colony) -> str:
+    """Render one full frame, without cursor control."""
+    return "\n".join(grid_lines(colony)) + "\n" + status(colony)
 
 
 def status(colony: Colony) -> str:
@@ -102,6 +116,30 @@ def legend() -> str:
         f"{BLUE.format(FOOD_RAMP[2])}#{RESET} trail to food   "
         f"{BLUE.format(HOME_RAMP[2])}#{RESET} trail home"
     )
+
+
+GAP = "   "
+
+
+def duel_frame(left: Colony, right: Colony, left_title: str, right_title: str) -> str:
+    """Two colonies stitched side by side, running the same map."""
+    header = (
+        WHITE + left_title[: grid_width(left)].ljust(grid_width(left)) + RESET
+        + GAP
+        + WHITE + right_title[: grid_width(right)].ljust(grid_width(right)) + RESET
+    )
+    rows = [a + GAP + b for a, b in zip(grid_lines(left), grid_lines(right))]
+    scores = (
+        f"  {WHITE}{left_title}{RESET}: {RED}{left.delivered}{RESET} delivered"
+        f"      {WHITE}{right_title}{RESET}: {RED}{right.delivered}{RESET} delivered"
+        f"      {DIM}tick {left.ticks}{RESET}"
+    )
+    return "\n".join([header, *rows, "", scores])
+
+
+def draw_duel(left: Colony, right: Colony, left_title: str, right_title: str) -> None:
+    print(HOME_CURSOR + duel_frame(left, right, left_title, right_title) + "\n" + legend(),
+          flush=True)
 
 
 def draw(colony: Colony, title: str = "") -> None:
