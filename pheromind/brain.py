@@ -38,6 +38,17 @@ N_ACTIONS = 4
 
 GENOME_SIZE = N_SENSES * N_HIDDEN + N_HIDDEN + N_HIDDEN * N_ACTIONS + N_ACTIONS
 
+# Named slices of the sense vector. Knocking one out and re-running is the only
+# honest way to find out whether a colony leans on it or merely has it wired up.
+SENSE_GROUPS: dict[str, tuple[int, ...]] = {
+    "carrying": (0,),
+    "food_trail": (1, 2, 3),
+    "home_trail": (4, 5, 6),
+    "food_sight": (7, 8, 9),
+    "rock": (10, 11, 12),
+    "nest_bearing": (13, 14, 15),
+}
+
 
 def random_genome(rng: np.random.Generator, scale: float = 0.8) -> np.ndarray:
     return rng.normal(0.0, scale, size=GENOME_SIZE).astype(np.float32)

@@ -18,8 +18,8 @@ from pathlib import Path
 import numpy as np
 
 from . import scenarios
-from .brain import Brain, load_genome, random_genome, save_genome
-from .colony import Colony, ColonyConfig, evaluate
+from .brain import SENSE_GROUPS, Brain, load_genome, random_genome, save_genome
+from .colony import Colony, ColonyConfig, evaluate, run_episode
 from .evolve import EvolutionConfig, GenerationReport, evolve
 from .render import begin_animation, draw, draw_duel, end_animation
 from .world import World, WorldConfig
@@ -181,6 +181,46 @@ def cmd_watch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ablate(args: argparse.Namespace) -> int:
+    """Knock out one sense at a time and see what the colony actually leaned on.
+
+    A weight matrix will happily contain large numbers for a sense the colony
+    ignores in practice, so reading the genome tells you very little. Cutting
+    the signal and re-running tells you everything.
+    """
+    genome = _load(args)
+    colony_cfg, world_cfg = _colony_cfg(args), _world_cfg(args)
+    seeds = [20_000 + i for i in range(args.trials)]
+
+    def mean_delivered(cfg: ColonyConfig) -> float:
+        runs = [run_episode(genome, s, cfg, world_cfg).delivered for s in seeds]
+        return float(np.mean(runs))
+
+    baseline = mean_delivered(colony_cfg)
+    print(f"{args.scenario}: {args.trials} worlds, baseline {baseline:.1f} delivered\n")
+
+    conditions: list[tuple[str, ColonyConfig]] = [
+        ("cannot lay pheromone", replace(colony_cfg, lay_rate=0.0)),
+    ]
+    conditions += [
+        (f"blind to {name}", replace(colony_cfg, blind=idx))
+        for name, idx in SENSE_GROUPS.items()
+    ]
+
+    print(f"  {'knocked out':<24} {'delivered':>10} {'cost':>8}")
+    results = []
+    for label, cfg in conditions:
+        score = mean_delivered(cfg)
+        results.append((100.0 * (1.0 - score / baseline) if baseline else 0.0, label, score))
+
+    for cost, label, score in sorted(results, reverse=True):
+        print(f"  {label:<24} {score:>10.1f} {cost:>7.0f}%")
+
+    print("\nA negative cost means the colony did no worse without it — that sense "
+          "\nis wired up but not load-bearing on this scenario.")
+    return 0
+
+
 def cmd_duel(args: argparse.Namespace) -> int:
     """Race two colonies on identical maps, side by side."""
     colony_cfg = _colony_cfg(args)
@@ -308,6 +348,12 @@ def build_parser() -> argparse.ArgumentParser:
     duel.add_argument("--fps", type=float, default=18.0, help="0 for no delay")
     duel.add_argument("--every", type=int, default=1, help="draw every Nth tick")
     duel.set_defaults(func=cmd_duel)
+
+    ablate = subs.add_parser("ablate", help="knock out senses to see which ones matter")
+    add_world_args(ablate)
+    ablate.add_argument("--genome", help="default: champions/<scenario>.json")
+    ablate.add_argument("--trials", type=int, default=10)
+    ablate.set_defaults(func=cmd_ablate)
 
     bench = subs.add_parser("bench", help="score a genome on unseen worlds")
     add_world_args(bench)

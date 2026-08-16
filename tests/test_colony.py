@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 
 from pheromind.brain import N_SENSES, Brain, random_genome
-from pheromind.colony import Colony, ColonyConfig, evaluate
+from pheromind.colony import Colony, ColonyConfig, evaluate, run_episode
 from pheromind.world import World, WorldConfig
 
 
@@ -77,6 +77,34 @@ class TestColony(unittest.TestCase):
         colony.step()
         self.assertEqual(colony.delivered, 4)
         self.assertFalse(colony.carrying.any())
+
+    def test_blinding_zeroes_exactly_the_named_senses(self):
+        from pheromind.brain import SENSE_GROUPS
+
+        colony = make_colony(n_ants=10)
+        colony.run(20)
+        seeing = colony.senses()
+
+        colony.cfg = ColonyConfig(n_ants=10, blind=SENSE_GROUPS["home_trail"])
+        blinded = colony.senses()
+
+        for i in SENSE_GROUPS["home_trail"]:
+            self.assertTrue(np.all(blinded[:, i] == 0.0))
+        # Untouched senses must survive intact, or ablation proves nothing.
+        for i in SENSE_GROUPS["nest_bearing"]:
+            np.testing.assert_allclose(blinded[:, i], seeing[:, i])
+
+    def test_sense_groups_cover_every_input_exactly_once(self):
+        from pheromind.brain import N_SENSES, SENSE_GROUPS
+
+        covered = sorted(i for idx in SENSE_GROUPS.values() for i in idx)
+        self.assertEqual(covered, list(range(N_SENSES)))
+
+    def test_run_episode_hands_back_a_finished_colony(self):
+        genome = random_genome(np.random.default_rng(2))
+        colony = run_episode(genome, seed=1, colony_cfg=ColonyConfig(n_ants=8, steps=30))
+        self.assertEqual(colony.ticks, 30)
+        self.assertGreaterEqual(colony.delivered, 0)
 
     def test_evaluate_is_deterministic_for_a_seed(self):
         genome = random_genome(np.random.default_rng(3))

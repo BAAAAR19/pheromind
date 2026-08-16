@@ -33,6 +33,8 @@ class ColonyConfig:
     lay_rate: float = 0.35  # pheromone laid at full output
     lay_threshold: float = 0.15  # below this the ant lays nothing at all
     wall_bounce: int = 4  # eighths of a circle to turn when hitting an edge
+    # Sense indices to hold at zero, for ablation. See brain.SENSE_GROUPS.
+    blind: tuple[int, ...] = ()
 
 
 @dataclass
@@ -105,6 +107,10 @@ class Colony:
 
         senses = np.stack([np.asarray(c, dtype=np.float32) for c in columns], axis=1)
         assert senses.shape[1] == N_SENSES, senses.shape
+
+        # Ablation: the ant keeps the wiring but stops receiving the signal.
+        if self.cfg.blind:
+            senses[:, list(self.cfg.blind)] = 0.0
         return senses
 
     # -- one tick --------------------------------------------------------
@@ -165,6 +171,20 @@ class Colony:
         return self.delivered
 
 
+def run_episode(
+    genome: np.ndarray,
+    seed: int,
+    colony_cfg: ColonyConfig | None = None,
+    world_cfg: WorldConfig | None = None,
+) -> Colony:
+    """Play one full episode and hand back the colony, still holding its stats."""
+    rng = np.random.default_rng(seed)
+    world = World.generate(world_cfg, rng)
+    colony = Colony.spawn(world, Brain.from_genome(genome), colony_cfg, rng)
+    colony.run()
+    return colony
+
+
 def evaluate(
     genome: np.ndarray,
     seed: int,
@@ -177,8 +197,5 @@ def evaluate(
     merely *finding* food keeps the very first generations from being an
     undifferentiated wall of zeros with nothing for selection to grip.
     """
-    rng = np.random.default_rng(seed)
-    world = World.generate(world_cfg, rng)
-    colony = Colony.spawn(world, Brain.from_genome(genome), colony_cfg, rng)
-    colony.run()
+    colony = run_episode(genome, seed, colony_cfg, world_cfg)
     return float(colony.delivered) + 0.05 * float(colony.picked_up)
