@@ -37,6 +37,17 @@ class TestColony(unittest.TestCase):
             self.assertTrue(np.all((colony.x >= 0) & (colony.x < w)))
             self.assertTrue(np.all((colony.y >= 0) & (colony.y < h)))
 
+    def test_ants_never_stand_inside_rock(self):
+        rng = np.random.default_rng(6)
+        cfg = WorldConfig(width=40, height=24, food_piles=3,
+                          wall_style="blocks", wall_blocks=12)
+        world = World.generate(cfg, rng)
+        colony = Colony.spawn(world, Brain.from_genome(random_genome(rng)),
+                              ColonyConfig(n_ants=30), rng)
+        for _ in range(200):
+            colony.step()
+            self.assertFalse(world.walls[colony.y, colony.x].any())
+
     def test_food_is_conserved(self):
         colony = make_colony(n_ants=30)
         colony.run(150)

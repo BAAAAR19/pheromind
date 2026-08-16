@@ -89,6 +89,9 @@ class Colony:
         columns += [w.sample(HOME, sx, sy) for sx, sy in spots]
         # Squash food counts so a big pile doesn't saturate the layer.
         columns += [np.tanh(w.food_at(sx, sy) / 3.0) for sx, sy in spots]
+        # Feeling rock ahead is what lets a colony learn to round an obstacle
+        # rather than grind along it until the episode runs out.
+        columns += [w.is_wall(sx, sy).astype(np.float32) for sx, sy in spots]
 
         # Ants keep a rough bearing home the way real ones do, by path
         # integration; without it a fresh random colony would never once
@@ -125,8 +128,9 @@ class Colony:
         nx = self.x + step[:, 0]
         ny = self.y + step[:, 1]
 
-        # An ant that walks into a wall turns hard instead of leaving the map.
-        blocked = ~self.world.in_bounds(nx, ny)
+        # An ant that walks into the map edge or a boulder turns hard rather
+        # than leaving the world or standing inside rock.
+        blocked = ~self.world.passable(nx, ny)
         if blocked.any():
             self.heading[blocked] = (self.heading[blocked] + self.cfg.wall_bounce) % 8
             nx[blocked] = self.x[blocked]

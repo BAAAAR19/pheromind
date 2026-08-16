@@ -6,13 +6,14 @@ average two vectors and add noise, so it never has to know the shape of anything
 
 Senses (in order)::
 
-    0     carrying food?
-    1..3  FOOD pheromone at the left / centre / right antenna
-    4..6  HOME pheromone at the left / centre / right antenna
-    7..9  visible food at the left / centre / right antenna
-    10    sin of the bearing to the nest, relative to the ant's heading
-    11    cos of the same bearing
-    12    distance to the nest, normalised
+    0      carrying food?
+    1..3   FOOD pheromone at the left / centre / right antenna
+    4..6   HOME pheromone at the left / centre / right antenna
+    7..9   visible food at the left / centre / right antenna
+    10..12 solid rock at the left / centre / right antenna
+    13     sin of the bearing to the nest, relative to the ant's heading
+    14     cos of the same bearing
+    15     distance to the nest, normalised
 
 Decisions::
 
@@ -31,7 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
-N_SENSES = 13
+N_SENSES = 16
 N_HIDDEN = 8
 N_ACTIONS = 4
 

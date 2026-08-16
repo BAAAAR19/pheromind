@@ -50,6 +50,47 @@ class TestWorld(unittest.TestCase):
         self.assertEqual(list(took), [True, False])
         self.assertEqual(self.world.food_remaining(), 0)
 
+    def test_open_ground_by_default(self):
+        self.assertFalse(self.world.walls.any())
+
+    def test_block_terrain_leaves_the_nest_reachable(self):
+        cfg = WorldConfig(width=40, height=24, wall_style="blocks", wall_blocks=12)
+        world = World.generate(cfg, np.random.default_rng(2))
+        self.assertTrue(world.walls.any())
+        nx, ny = world.nest
+        self.assertFalse(world.walls[ny, nx])
+        self.assertTrue(world.passable(np.array([nx]), np.array([ny]))[0])
+
+    def test_ring_terrain_always_has_a_way_out(self):
+        cfg = WorldConfig(width=44, height=28, wall_style="ring", ring_gaps=3)
+        world = World.generate(cfg, np.random.default_rng(5))
+        nx, ny = world.nest
+        ring = np.abs(np.hypot(*np.meshgrid(np.arange(cfg.width) - nx,
+                                            np.arange(cfg.height) - ny)) - cfg.ring_radius) < 0.7
+        # The doorways are cells on the ring's line that are not solid.
+        self.assertTrue((ring & ~world.walls).any())
+
+    def test_food_never_spawns_inside_rock(self):
+        cfg = WorldConfig(width=40, height=24, wall_style="blocks", wall_blocks=14)
+        world = World.generate(cfg, np.random.default_rng(3))
+        self.assertEqual(int(world.food[world.walls].sum()), 0)
+
+    def test_rock_holds_no_scent(self):
+        cfg = WorldConfig(width=30, height=20, wall_style="blocks", wall_blocks=6)
+        world = World.generate(cfg, np.random.default_rng(1))
+        world.pheromone[:] = 1.0
+        world.diffuse()
+        self.assertEqual(float(world.pheromone[:, world.walls].sum()), 0.0)
+
+    def test_unknown_wall_style_is_rejected(self):
+        with self.assertRaises(ValueError):
+            World.generate(WorldConfig(wall_style="swamp"), np.random.default_rng(0))
+
+    def test_out_of_bounds_counts_as_solid(self):
+        far = np.array([-3, self.cfg.width + 2])
+        self.assertTrue(np.all(self.world.is_wall(far, far)))
+        self.assertFalse(np.any(self.world.passable(far, far)))
+
     def test_nest_radius(self):
         nx, ny = self.world.nest
         self.assertTrue(self.world.at_nest(np.array([nx]), np.array([ny]))[0])

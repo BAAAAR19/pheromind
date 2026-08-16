@@ -30,6 +30,7 @@ BRIGHT_GREEN = "\033[38;5;120m"
 WHITE = "\033[38;5;255m"
 RED = "\033[38;5;203m"
 DIM = "\033[38;5;240m"
+STONE = "\033[38;5;242m"
 
 
 def _shade(value: float, ramp: list[int]) -> str:
@@ -60,6 +61,9 @@ def frame(colony: Colony) -> str:
                 grid[y][x] = _shade(fv, FOOD_RAMP)
             else:
                 grid[y][x] = _shade(hv, HOME_RAMP)
+
+    for y, x in zip(*np.nonzero(world.walls)):
+        grid[y][x] = STONE + "▓" + RESET
 
     for y, x in zip(*np.nonzero(world.food)):
         heavy = world.food[y, x] >= 3
@@ -94,7 +98,7 @@ def status(colony: Colony) -> str:
 def legend() -> str:
     return (
         f"{WHITE}@{RESET} nest   {GREEN}%{RESET} food   "
-        f"{WHITE}a{RESET} searching   {RED}A{RESET} carrying   "
+        f"{WHITE}a{RESET} searching   {RED}A{RESET} carrying   {STONE}▓{RESET} rock   "
         f"{BLUE.format(FOOD_RAMP[2])}#{RESET} trail to food   "
         f"{BLUE.format(HOME_RAMP[2])}#{RESET} trail home"
     )
