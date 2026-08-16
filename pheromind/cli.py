@@ -19,7 +19,7 @@ import numpy as np
 
 from . import scenarios
 from .brain import SENSE_GROUPS, Brain, load_genome, random_genome, save_genome
-from .colony import Colony, ColonyConfig, evaluate, run_episode
+from .colony import Colony, ColonyConfig, run_episode
 from .evolve import EvolutionConfig, GenerationReport, evolve
 from .render import begin_animation, draw, draw_duel, end_animation
 from .world import World, WorldConfig
@@ -281,16 +281,20 @@ def cmd_bench(args: argparse.Namespace) -> int:
     genome = random_genome(np.random.default_rng(args.seed)) if args.random else _load(args)
     colony_cfg, world_cfg = _colony_cfg(args), _world_cfg(args)
 
-    scores = []
+    # Delivered food is the number worth quoting. The fitness score adds a small
+    # bonus for merely picking food up, which matters to selection but would
+    # quietly inflate any figure reported as "food delivered".
+    delivered = []
     for trial in range(args.trials):
-        scores.append(evaluate(genome, 10_000 + trial, colony_cfg, world_cfg))
+        colony = run_episode(genome, 10_000 + trial, colony_cfg, world_cfg)
+        delivered.append(colony.delivered)
         print(f"\rworld {trial + 1}/{args.trials}", end="", flush=True)
 
-    spread = statistics.pstdev(scores) if len(scores) > 1 else 0.0
+    spread = statistics.pstdev(delivered) if len(delivered) > 1 else 0.0
     print(
-        f"\n{args.scenario}: {args.trials} unseen worlds | "
-        f"mean {statistics.mean(scores):.2f} | median {statistics.median(scores):.2f} "
-        f"| sd {spread:.2f} | worst {min(scores):.2f} | best {max(scores):.2f}"
+        f"\r{args.scenario}: {args.trials} unseen worlds — food delivered\n"
+        f"  mean {statistics.mean(delivered):.1f} | median {statistics.median(delivered):.1f} "
+        f"| sd {spread:.1f} | worst {min(delivered)} | best {max(delivered)}"
     )
     return 0
 
