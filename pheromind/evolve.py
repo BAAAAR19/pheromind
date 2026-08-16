@@ -15,8 +15,11 @@ Two details matter more than the rest:
 
 from __future__ import annotations
 
+import os
+from contextlib import nullcontext
 from dataclasses import dataclass, field
-from typing import Callable, Iterable
+from multiprocessing import Pool
+from typing import Callable, Sequence
 
 import numpy as np
 
@@ -36,6 +39,15 @@ class EvolutionConfig:
     crossover_rate: float = 0.7
     worlds_per_genome: int = 2
     seed: int = 0
+    # 0 picks one worker per core; 1 forces the serial path (handy in tests,
+    # where a pool costs more to start than the work it would do).
+    workers: int = 0
+
+    def resolved_workers(self) -> int:
+        if self.workers > 0:
+            return self.workers
+        jobs = self.population * self.worlds_per_genome
+        return max(1, min(os.cpu_count() or 1, jobs))
 
 
 @dataclass
@@ -75,20 +87,34 @@ def mutate(genome: np.ndarray, cfg: EvolutionConfig, rng: np.random.Generator) -
     return np.clip(child, -6.0, 6.0)
 
 
+def _evaluate_job(job: tuple) -> float:
+    """Module-level so a spawned worker can import it; Pool cannot ship a lambda."""
+    return evaluate(*job)
+
+
 def score_population(
-    population: Iterable[np.ndarray],
+    population: Sequence[np.ndarray],
     generation: int,
     cfg: EvolutionConfig,
     colony_cfg: ColonyConfig | None,
     world_cfg: WorldConfig | None,
+    pool: "Pool | None" = None,
 ) -> np.ndarray:
     # Every genome in a generation faces the identical set of worlds, so the
     # comparison between them is fair, while the set itself moves on.
     seeds = [cfg.seed + generation * 1000 + w for w in range(cfg.worlds_per_genome)]
-    return np.array(
-        [np.mean([evaluate(g, s, colony_cfg, world_cfg) for s in seeds]) for g in population],
-        dtype=np.float32,
-    )
+    jobs = [(genome, seed, colony_cfg, world_cfg) for genome in population for seed in seeds]
+
+    # One flat batch of genome x world jobs, rather than a batch per genome:
+    # more independent work in flight means the pool stays busy to the end.
+    if pool is None:
+        scores = [_evaluate_job(job) for job in jobs]
+    else:
+        chunk = max(1, len(jobs) // (cfg.resolved_workers() * 4))
+        scores = pool.map(_evaluate_job, jobs, chunksize=chunk)
+
+    # map preserves order, so this stays bit-for-bit identical to the serial path.
+    return np.asarray(scores, dtype=np.float32).reshape(len(population), len(seeds)).mean(axis=1)
 
 
 def evolve(
@@ -106,38 +132,42 @@ def evolve(
     champion = population[0]
     champion_score = -np.inf
 
-    for generation in range(cfg.generations):
-        scores = score_population(population, generation, cfg, colony_cfg, world_cfg)
-        order = np.argsort(scores)[::-1]
+    workers = cfg.resolved_workers()
+    pool_ctx = Pool(processes=workers) if workers > 1 else nullcontext()
 
-        if scores[order[0]] > champion_score:
-            champion_score = float(scores[order[0]])
-            champion = population[order[0]].copy()
+    with pool_ctx as pool:
+        for generation in range(cfg.generations):
+            scores = score_population(population, generation, cfg, colony_cfg, world_cfg, pool)
+            order = np.argsort(scores)[::-1]
 
-        report = GenerationReport(
-            generation=generation,
-            best=float(scores[order[0]]),
-            mean=float(scores.mean()),
-            median=float(np.median(scores)),
-            best_genome=population[order[0]].copy(),
-        )
-        history.append(report)
-        if on_generation:
-            on_generation(report)
+            if scores[order[0]] > champion_score:
+                champion_score = float(scores[order[0]])
+                champion = population[order[0]].copy()
 
-        if generation == cfg.generations - 1:
-            break
+            report = GenerationReport(
+                generation=generation,
+                best=float(scores[order[0]]),
+                mean=float(scores.mean()),
+                median=float(np.median(scores)),
+                best_genome=population[order[0]].copy(),
+            )
+            history.append(report)
+            if on_generation:
+                on_generation(report)
 
-        nxt = [population[i].copy() for i in order[: cfg.elites]]
-        while len(nxt) < cfg.population:
-            parent = population[tournament_select(scores, cfg.tournament, rng)]
-            if rng.random() < cfg.crossover_rate:
-                mate = population[tournament_select(scores, cfg.tournament, rng)]
-                child = crossover(parent, mate, rng)
-            else:
-                child = parent.copy()
-            nxt.append(mutate(child, cfg, rng))
-        population = nxt
+            if generation == cfg.generations - 1:
+                break
+
+            nxt = [population[i].copy() for i in order[: cfg.elites]]
+            while len(nxt) < cfg.population:
+                parent = population[tournament_select(scores, cfg.tournament, rng)]
+                if rng.random() < cfg.crossover_rate:
+                    mate = population[tournament_select(scores, cfg.tournament, rng)]
+                    child = crossover(parent, mate, rng)
+                else:
+                    child = parent.copy()
+                nxt.append(mutate(child, cfg, rng))
+            population = nxt
 
     assert champion.shape == (GENOME_SIZE,)
     return champion, history

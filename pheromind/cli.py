@@ -38,12 +38,15 @@ def cmd_train(args: argparse.Namespace) -> int:
         generations=args.generations,
         worlds_per_genome=args.worlds,
         seed=args.seed,
+        workers=args.workers,
     )
     colony_cfg = _colony_cfg(args)
     world_cfg = _world_cfg(args)
 
+    episodes = evo_cfg.population * evo_cfg.generations * evo_cfg.worlds_per_genome
     print(f"breeding {evo_cfg.population} colonies of {colony_cfg.n_ants} ants "
-          f"for {evo_cfg.generations} generations\n")
+          f"for {evo_cfg.generations} generations")
+    print(f"{episodes} episodes across {evo_cfg.resolved_workers()} worker(s)\n")
 
     started = time.time()
 
@@ -157,6 +160,8 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--population", type=int, default=32)
     train.add_argument("--generations", type=int, default=25)
     train.add_argument("--worlds", type=int, default=2, help="worlds averaged per genome")
+    train.add_argument("--workers", type=int, default=0,
+                       help="parallel processes; 0 = one per core, 1 = serial")
     train.add_argument("--out", default=str(DEFAULT_CHAMPION))
     train.set_defaults(func=cmd_train)
 

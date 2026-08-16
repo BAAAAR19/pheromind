@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 import numpy as np
 
@@ -67,8 +68,14 @@ class TestOperators(unittest.TestCase):
 
 class TestEvolve(unittest.TestCase):
     def _run(self, **overrides):
+        # Serial by default: these populations are far too small to repay the
+        # cost of spawning a pool, and one test below covers the parallel path.
         cfg = EvolutionConfig(
-            population=6, generations=3, worlds_per_genome=1, seed=1, **overrides
+            population=6,
+            generations=3,
+            worlds_per_genome=1,
+            seed=1,
+            **{"workers": 1, **overrides},
         )
         return evolve(cfg, FAST_COLONY, FAST_WORLD)
 
@@ -85,13 +92,15 @@ class TestEvolve(unittest.TestCase):
 
     def test_different_seeds_diverge(self):
         a, _ = self._run()
-        cfg = EvolutionConfig(population=6, generations=3, worlds_per_genome=1, seed=99)
+        cfg = EvolutionConfig(
+            population=6, generations=3, worlds_per_genome=1, seed=99, workers=1
+        )
         b, _ = evolve(cfg, FAST_COLONY, FAST_WORLD)
         self.assertFalse(np.array_equal(a, b))
 
     def test_elites_never_let_the_best_score_collapse(self):
         cfg = EvolutionConfig(
-            population=8, generations=4, worlds_per_genome=1, seed=2, elites=2
+            population=8, generations=4, worlds_per_genome=1, seed=2, elites=2, workers=1
         )
         _, history = evolve(cfg, FAST_COLONY, FAST_WORLD)
         bests = [h.best for h in history]
@@ -102,6 +111,21 @@ class TestEvolve(unittest.TestCase):
     def test_report_line_is_printable(self):
         _, history = self._run()
         self.assertIn("gen", history[0].line())
+
+    def test_parallel_scoring_matches_serial_exactly(self):
+        # The pool exists to save wall clock, not to change answers. map()
+        # preserves order, so results must be bit-for-bit identical.
+        cfg = EvolutionConfig(population=6, generations=2, worlds_per_genome=2, seed=4)
+        serial, _ = evolve(replace(cfg, workers=1), FAST_COLONY, FAST_WORLD)
+        parallel, _ = evolve(replace(cfg, workers=3), FAST_COLONY, FAST_WORLD)
+        np.testing.assert_array_equal(serial, parallel)
+
+    def test_worker_count_resolves_sensibly(self):
+        self.assertEqual(EvolutionConfig(workers=5).resolved_workers(), 5)
+        # Auto never asks for more workers than there are jobs to hand out.
+        tiny = EvolutionConfig(workers=0, population=2, worlds_per_genome=1)
+        self.assertLessEqual(tiny.resolved_workers(), 2)
+        self.assertGreaterEqual(tiny.resolved_workers(), 1)
 
 
 if __name__ == "__main__":
