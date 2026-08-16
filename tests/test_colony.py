@@ -2,9 +2,9 @@ import unittest
 
 import numpy as np
 
-from antmind.brain import N_SENSES, Brain, random_genome
-from antmind.colony import Colony, ColonyConfig, evaluate
-from antmind.world import World, WorldConfig
+from pheromind.brain import N_SENSES, Brain, random_genome
+from pheromind.colony import Colony, ColonyConfig, evaluate
+from pheromind.world import World, WorldConfig
 
 
 def make_colony(n_ants=12, seed=0, **world_kwargs):
@@ -45,7 +45,7 @@ class TestColony(unittest.TestCase):
         self.assertEqual(accounted, world.food_at_start)
 
     def test_carrying_ants_lay_the_food_channel(self):
-        from antmind.world import FOOD, HOME
+        from pheromind.world import FOOD, HOME
 
         colony = make_colony(n_ants=8)
         colony.carrying[:] = True

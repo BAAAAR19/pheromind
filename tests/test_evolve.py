@@ -2,16 +2,16 @@ import unittest
 
 import numpy as np
 
-from antmind.brain import GENOME_SIZE, random_genome
-from antmind.colony import ColonyConfig
-from antmind.evolve import (
+from pheromind.brain import GENOME_SIZE, random_genome
+from pheromind.colony import ColonyConfig
+from pheromind.evolve import (
     EvolutionConfig,
     crossover,
     evolve,
     mutate,
     tournament_select,
 )
-from antmind.world import WorldConfig
+from pheromind.world import WorldConfig
 
 FAST_COLONY = ColonyConfig(n_ants=10, steps=45)
 FAST_WORLD = WorldConfig(width=30, height=18, food_piles=3, min_pile_distance=6.0)

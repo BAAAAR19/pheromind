@@ -1,8 +1,8 @@
 """Command line: breed colonies, watch one forage, or measure how good it is.
 
-    python -m antmind train --generations 30 --out champions/best.json
-    python -m antmind watch --genome champions/best.json
-    python -m antmind bench --genome champions/best.json --trials 20
+    python -m pheromind train --generations 30 --out champions/best.json
+    python -m pheromind watch --genome champions/best.json
+    python -m pheromind bench --genome champions/best.json --trials 20
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ def cmd_train(args: argparse.Namespace) -> int:
 def _load(args: argparse.Namespace) -> np.ndarray:
     path = Path(args.genome)
     if not path.exists():
-        print(f"no genome at {path} — run `python -m antmind train` first, "
+        print(f"no genome at {path} — run `python -m pheromind train` first, "
               f"or pass --random to watch an untrained colony.", file=sys.stderr)
         raise SystemExit(2)
     genome, meta = load_genome(path)
@@ -140,7 +140,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="antmind", description=__doc__,
+    parser = argparse.ArgumentParser(prog="pheromind", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     subs = parser.add_subparsers(dest="command", required=True)
 

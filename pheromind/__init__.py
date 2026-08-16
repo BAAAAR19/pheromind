@@ -1,4 +1,4 @@
-"""antmind — neuroevolution of foraging ant colonies, in NumPy.
+"""pheromind — neuroevolution of foraging ant colonies, in NumPy.
 
 A colony is a swarm of ants that all share one small neural network. The network
 is never trained by gradient descent; colonies are simply scored on how much food

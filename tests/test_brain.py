@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from antmind.brain import (
+from pheromind.brain import (
     GENOME_SIZE,
     N_ACTIONS,
     N_HIDDEN,

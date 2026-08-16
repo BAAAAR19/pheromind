@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from antmind.world import FOOD, HOME, World, WorldConfig
+from pheromind.world import FOOD, HOME, World, WorldConfig
 
 
 class TestWorld(unittest.TestCase):
