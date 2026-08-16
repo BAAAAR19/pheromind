@@ -6,6 +6,7 @@
     4
   ],
   "meta": {
+    "scenario": "classic",
     "generations": 40,
     "population": 40,
     "ants": 45,
